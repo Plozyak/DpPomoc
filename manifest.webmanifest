@@ -3,7 +3,7 @@
   "short_name": "DD CRM",
   "description": "CRM для керування замовленнями DiplomovaDilna",
   "lang": "uk",
-  "start_url": "./",
+  "start_url": "./cloud.html",
   "scope": "./",
   "display": "standalone",
   "background_color": "#f4f7f5",
