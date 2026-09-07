@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="uk">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+<title>DiplomovaDilna CRM</title>
+<meta name="theme-color" content="#123f2c" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="default" />
+<meta name="apple-mobile-web-app-title" content="DD CRM" />
+<link rel="manifest" href="./manifest.webmanifest" />
+<link rel="icon" href="./icon.svg" type="image/svg+xml" />
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif;background:#f4f7f5;color:#18241d}#crmFrame{position:fixed;inset:0;width:100%;height:100%;border:0;background:#f4f7f5}.gate{position:fixed;inset:0;z-index:1000;background:linear-gradient(145deg,#0f3828,#173f30 55%,#0b2a1d);display:grid;place-items:center;padding:20px}.card{width:min(460px,100%);background:#fff;border-radius:20px;padding:26px;box-shadow:0 30px 90px #0006}.logo{width:54px;height:54px;border-radius:16px;background:#173f30;color:#fff;display:grid;place-items:center;font-weight:900;font-size:22px;margin-bottom:16px}.card h2{margin:0 0 7px;font-size:23px}.card p{margin:0 0 18px;color:#718077;font-size:13px;line-height:1.55}.card label{display:block;margin:12px 0 0;font-size:11px;font-weight:850;color:#718077}.card input{width:100%;margin-top:6px;border:1px solid #e2eae5;border-radius:10px;padding:11px 12px;outline:none}.card input:focus{border-color:#82aa94;box-shadow:0 0 0 3px #e9f4ee}.buttons{display:flex;gap:9px;margin-top:18px;flex-wrap:wrap}.btn{border:0;border-radius:10px;min-height:40px;padding:0 16px;font-weight:800;font-size:13px;cursor:pointer}.primary{background:#155b3a;color:#fff}.secondary{background:#fff;border:1px solid #e2eae5;color:#18241d}.msg{margin-top:12px;padding:10px 12px;border-radius:9px;background:#fff3df;color:#805214;font-size:12px;line-height:1.45}.msg.ok{background:#e9f4ee;color:#155b3a}.hint{font-size:11px!important;margin-top:10px!important}.linkbtn{border:0;background:transparent;color:#155b3a;padding:12px 0 0;font-size:11px;text-decoration:underline;cursor:pointer}.loading{display:flex;align-items:center;gap:10px;color:#718077;font-size:13px}.spin{width:18px;height:18px;border:2px solid #d9e6df;border-top-color:#155b3a;border-radius:50%;animation:spin .8s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+<iframe id="crmFrame" src="./index.html" title="DiplomovaDilna CRM"></iframe>
+<div id="gate" class="gate"><div class="card"><div class="logo">DD</div><div class="loading"><span class="spin"></span>Підключення CRM…</div></div></div>
+<script>
+const CONFIG_KEY='dd_supabase_config_v1';
+let sb=null,user=null,bridgeReady=false,lastUpdated=null,pollTimer=null,saveTimer=null;
+const frame=document.getElementById('crmFrame'),gate=document.getElementById('gate');
+const esc=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+function getConfig(){try{return JSON.parse(localStorage.getItem(CONFIG_KEY))||null}catch{return null}}
+function setConfig(url,key){localStorage.setItem(CONFIG_KEY,JSON.stringify({url:url.trim(),key:key.trim()}))}
+function show(html){gate.style.display='grid';gate.innerHTML=`<div class="card">${html}</div>`}
+function hide(){gate.style.display='none'}
+function setupGate(msg=''){
+ const c=getConfig()||{};
+ show(`<div class="logo">DD</div><h2>Підключення Supabase</h2><p>Введи Project URL та publishable key. Вони зберігаються лише у цьому браузері.</p><form id="setupForm"><label>Project URL<input name="url" type="url" placeholder="https://xxxxx.supabase.co" value="${esc(c.url||'')}" required></label><label>Publishable key<input name="key" type="text" placeholder="sb_publishable_… або anon key" value="${esc(c.key||'')}" required></label><div class="buttons"><button class="btn primary">Зберегти й підключити</button><button class="btn secondary" type="button" id="localBtn">Відкрити локально</button></div>${msg?`<div class="msg">${esc(msg)}</div>`:''}</form><p class="hint">Перед підключенням виконай файл <b>supabase-schema.sql</b> у Supabase → SQL Editor.</p>`);
+ document.getElementById('setupForm').onsubmit=e=>{e.preventDefault();const f=new FormData(e.target);setConfig(String(f.get('url')),String(f.get('key')));location.reload()};
+ document.getElementById('localBtn').onclick=()=>{hide();setFrameStatus('ЛОКАЛЬНИЙ РЕЖИМ','Синхронізацію вимкнено.')};
+}
+function authGate(msg='',ok=false){
+ show(`<div class="logo">DD</div><h2>Вхід у CRM</h2><p>Використовуй один email і пароль на комп’ютері та iPhone.</p><form id="authForm"><label>Email<input name="email" type="email" autocomplete="email" required></label><label>Пароль<input name="password" type="password" autocomplete="current-password" minlength="6" required></label><div class="buttons"><button class="btn primary" name="action" value="login">Увійти</button><button class="btn secondary" name="action" value="signup">Створити акаунт</button></div>${msg?`<div class="msg ${ok?'ok':''}">${esc(msg)}</div>`:''}</form><button id="changeCfg" class="linkbtn">Змінити налаштування Supabase</button>`);
+ document.getElementById('authForm').onsubmit=authSubmit;
+ document.getElementById('changeCfg').onclick=()=>setupGate();
+}
+async function authSubmit(e){
+ e.preventDefault();const f=new FormData(e.target),email=String(f.get('email')).trim(),password=String(f.get('password')),action=e.submitter?.value||'login';
+ try{
+  if(action==='signup'){
+   const {data,error}=await sb.auth.signUp({email,password});if(error)throw error;
+   if(data.session){user=data.user;await afterLogin()}else authGate('Акаунт створено. Перевір email і підтвердь реєстрацію, потім увійди.',true);
+  }else{
+   const {data,error}=await sb.auth.signInWithPassword({email,password});if(error)throw error;user=data.user;await afterLogin();
+  }
+ }catch(err){authGate(err?.message||'Не вдалося увійти. Перевір email, пароль і налаштування.')}
+}
+function installBridge(){
+ if(bridgeReady)return true;
+ try{
+  const d=frame.contentDocument,w=frame.contentWindow;if(!d||!w)return false;
+  const sc=d.createElement('script');
+  sc.textContent=`window.crmBridge={getState:()=>JSON.parse(JSON.stringify(state)),setState:(x)=>{state=x;localStorage.setItem(STORAGE,JSON.stringify(state));render()},setStatus:(tag,text,email)=>{const el=document.querySelector('.sideBottom');if(el){el.innerHTML='<span class="demoTag">'+tag+'</span><small>'+text+(email?'<br>'+email:'')+'</small><button id="cloudLogoutInside" style="border:0;background:transparent;color:#b9dcc8;padding:7px 0 0;font-size:11px;text-decoration:underline;cursor:pointer">Вийти</button>';document.getElementById('cloudLogoutInside').onclick=()=>parent.postMessage({type:'crm-logout'},location.origin)}}};const __crmOldSave=save;save=function(){__crmOldSave();parent.postMessage({type:'crm-save',state:window.crmBridge.getState()},location.origin)};parent.postMessage({type:'crm-bridge-ready'},location.origin);`;
+  d.body.appendChild(sc);bridgeReady=true;return true;
+ }catch(err){console.error('Bridge install error',err);return false}
+}
+function setFrameState(data){try{frame.contentWindow.crmBridge?.setState(data)}catch(err){console.error(err)}}
+function getFrameState(){try{return frame.contentWindow.crmBridge?.getState()||null}catch{return null}}
+function setFrameStatus(tag,text,email=''){try{frame.contentWindow.crmBridge?.setStatus(tag,text,email)}catch{}}
+async function init(){
+ if(!bridgeReady&&!installBridge()){setTimeout(init,250);return}
+ const cfg=getConfig();if(!cfg?.url||!cfg?.key){setupGate();return}
+ try{
+  if(!window.supabase?.createClient)throw new Error('Не завантажилась бібліотека Supabase. Перевір інтернет.');
+  sb=window.supabase.createClient(cfg.url,cfg.key,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
+  const {data,error}=await sb.auth.getSession();if(error)throw error;
+  if(!data.session){authGate();return}
+  user=data.session.user;await afterLogin();
+ }catch(err){setupGate(err?.message||'Не вдалося підключитися до Supabase.')}
+}
+async function afterLogin(){
+ try{
+  const {data,error}=await sb.from('crm_state').select('data,updated_at').eq('user_id',user.id).maybeSingle();if(error)throw error;
+  if(data?.data?.orders&&data?.data?.editors){setFrameState(data.data);lastUpdated=data.updated_at||null}
+  else{
+   const local=getFrameState()||{editors:[],orders:[]};
+   const useLocal=confirm('Хмарна CRM порожня. OK — завантажити поточні локальні дані. Cancel — почати з порожньої CRM.');
+   const first=useLocal?local:{editors:[],orders:[]};setFrameState(first);await writeCloud(first);
+  }
+  hide();setFrameStatus('ХМАРА ПІДКЛЮЧЕНА','ПК та iPhone — одна база.',user.email||'');startPolling();
+ }catch(err){authGate('Підключення є, але база не готова: '+(err?.message||'невідома помилка')+'. Виконай supabase-schema.sql у SQL Editor.')}
+}
+async function writeCloud(data){
+ if(!sb||!user)return;
+ const now=new Date().toISOString();
+ const {error}=await sb.from('crm_state').upsert({user_id:user.id,data,updated_at:now},{onConflict:'user_id'});if(error)throw error;lastUpdated=now;setFrameStatus('ХМАРА ПІДКЛЮЧЕНА','Зміни синхронізовано.',user.email||'')
+}
+function queueSave(data){clearTimeout(saveTimer);saveTimer=setTimeout(async()=>{try{await writeCloud(data)}catch(err){console.error(err);setFrameStatus('ПОМИЛКА СИНХРОНІЗАЦІЇ','Перевір інтернет або Supabase.',user?.email||'')}},180)}
+function startPolling(){clearInterval(pollTimer);pollTimer=setInterval(refreshCloud,7000)}
+async function refreshCloud(){
+ if(!sb||!user||document.hidden)return;
+ try{const {data,error}=await sb.from('crm_state').select('data,updated_at').eq('user_id',user.id).maybeSingle();if(error)throw error;if(data?.updated_at&&data.updated_at!==lastUpdated){lastUpdated=data.updated_at;setFrameState(data.data);setFrameStatus('ХМАРА ПІДКЛЮЧЕНА','Оновлено з хмари.',user.email||'')}}catch(err){console.error(err)}
+}
+async function logout(){clearInterval(pollTimer);if(sb)await sb.auth.signOut();user=null;authGate('Вихід виконано.',true);setFrameStatus('ХМАРА','Не авторизовано.')}
+window.addEventListener('message',e=>{if(e.origin!==location.origin)return;if(e.data?.type==='crm-save')queueSave(e.data.state);if(e.data?.type==='crm-logout')logout();if(e.data?.type==='crm-bridge-ready')bridgeReady=true});
+frame.addEventListener('load',()=>{bridgeReady=false;installBridge();init()});
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)refreshCloud()});
+setTimeout(init,300);
+</script>
+</body>
+</html>
