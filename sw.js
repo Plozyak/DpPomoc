@@ -1,5 +1,5 @@
-const CACHE = 'dd-crm-v3';
-const ASSETS = ['./', './index.html', './cloud.html', './manifest.webmanifest', './icon.svg'];
+const CACHE = 'dd-crm-v4';
+const ASSETS = ['./', './index.html', './enhanced.html', './cloud.html', './app.html', './crm-enhancements.js', './manifest.webmanifest', './icon.svg'];
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(ASSETS)));
   self.skipWaiting();
@@ -14,5 +14,5 @@ self.addEventListener('fetch', event => {
     const copy = response.clone();
     caches.open(CACHE).then(cache => cache.put(event.request, copy));
     return response;
-  }).catch(() => caches.match(event.request).then(r => r || caches.match('./cloud.html') || caches.match('./index.html'))));
+  }).catch(() => caches.match(event.request).then(r => r || caches.match('./enhanced.html') || caches.match('./cloud.html') || caches.match('./app.html'))));
 });
